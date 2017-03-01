@@ -1,0 +1,243 @@
+#!/usr/local/bin/angort
+[`sdl,`time] each {i library drop}
+
+
+# original image sizes
+1841 tofloat !OrigWidth
+1500 tofloat !OrigHeight
+
+?OrigWidth ?OrigHeight / !Aspect
+
+0!FullScreen
+
+# open a window or fullscreen
+(
+    ?FullScreen if
+        none none sdl$fullscreenopen 
+        sdl$scrsize !RealSWidth !SHeight
+        
+        ?SHeight ?Aspect * !SWidth
+        ?RealSWidth ?SWidth - 2 / !SOffsetX
+        0 sdl$showmouse
+    else
+        800 !SHeight
+        ?SHeight ?Aspect * !SWidth
+        0!SOffsetX
+        "Golconda" ?SWidth ?SHeight sdl$open
+    then
+)@
+?SWidth ?OrigWidth / !SizeRatio
+
+
+[?SWidth,?SHeight] "," intercalate.
+?SizeRatio. ?SOffsetX .
+
+# load the font(s)
+
+"/usr/share/fonts/opentype/linux-libertine/LinBiolinum_R.otf" 
+30 sdl$openfont !Font
+
+:writetext |t,x,y,sc:w,h|
+    ?t ?Font sdl$maketext !t
+    <<[0,0,0]>> ?t!sdl$tcol
+    ?t sdl$texsize ?sc * !w ?sc * !h
+    ?x ?y
+    ?w ?h ?t sdl$blit;
+
+    
+    
+
+# load the background layers
+"back.png" sdl$load !BackImg
+"backfrontlayer.png" sdl$load !BackFrontImg
+
+:choose |l:| rand ?l len % ?l get;
+
+
+# load small images
+[] 0 4 range each {"vs" i 1+ + ".png" + sdl$loadsurf,} !SmallImgs
+[] 0 5 range each {"small" i 1+ + ".png" + sdl$loadsurf,} !MedImgs
+[] 0 5 range each {"l" i 1+ + ".png" + sdl$loadsurf,} !LargeImgs
+[] !SmallChaps [] !MedChaps [] !LargeChaps
+
+#
+# Chaps - objects done with closures. Note that we keep both the surface (local memory) and texture
+# (GPU memory) so that we can look up pixels in the surface.
+#
+:mkchap |speedmul,imgset:x,y,img,imgsurf,w,h,speed,scale,scw,sch,flip,exploding,this|
+    255!exploding
+    rand 2 % !flip
+    frand 0.5 - 2 * # -1 to 1
+    0.3 * # scale variation factor, 0-1
+    1 + !scale
+    ?imgset choose !imgsurf
+    ?imgsurf sdl$surf2tex !img
+    ?img sdl$texsize ?SizeRatio * !w ?SizeRatio * !h
+    ?w ?scale * !scw
+    ?h ?scale * !sch
+    # 1640 is the left-hand edge of the near yellow wall.
+    rand 1640 ?SizeRatio * ?scw - toint % !x
+    rand ?SHeight toint 3 / % tofloat !y ?scale ?speedmul * 0.1 * frand 0.1 + * !speed
+    [% dup!this
+     `getx (?x),
+     `gety (?y),
+     `getsc (?scale),
+     `click (|scrx,scry:px|
+         # get coords inside the chap and
+         # get the pix (will be none if out of range)
+         ?scrx ?SOffsetX - ?x - ?SizeRatio / ?scale /
+         ?scry ?y - ?SizeRatio / ?scale /
+         ?imgsurf sdl$getpix !px
+         ?px isnone not if
+             ?px 24 shiftright -1 = if
+                 254!exploding
+                 1 stop
+             then
+         then
+         0
+     ),
+     `draw (
+         ?exploding 255 < if
+             ?exploding 10- !exploding
+             ?exploding 0 < if 0!exploding then
+             ?exploding
+         else
+             255
+         then
+         ?img !sdl$talpha
+         ?x ?SOffsetX+ ?y ?scw ?sch
+         0 0 none none
+         0 ?flip
+         ?img sdl$exflipblit
+         
+         ?y ?speed + !y
+         ?y ?SHeight > ?exploding 0 <= or if
+             rand 1640 ?SizeRatio * ?scw - toint % !x
+             ?sch neg rand 200 % - !y
+             255!exploding
+         then
+     )
+     ]
+;
+
+:mksmallchap 0.2 ?SmallImgs mkchap ?SmallChaps push;
+:mkmedchap 1 ?MedImgs mkchap ?MedChaps push;
+:mklargechap 3 ?LargeImgs mkchap ?LargeChaps push;
+
+:drawsmall ?SmallChaps each { i?`draw@ };
+:drawmed ?MedChaps each { i?`draw@ };
+:drawlarge ?LargeChaps each { i?`draw@ };
+
+"apple.png" sdl$load !AppleImg
+0.5 ?SizeRatio * !AppleScale
+?AppleImg sdl$texsize !AppleW !AppleH
+?AppleW ?AppleScale * !AppleW
+?AppleH ?AppleScale * !AppleH
+81 ?AppleScale * const APPLECENTREX
+151 ?AppleScale * const APPLECENTREY
+
+[] !Apples
+
+:mkapple |x,y:this|
+    [%  dup!this
+     `zombie 0,
+     `drawandupdate (|:die|
+         0!die
+         ?x ?APPLECENTREX -
+         ?y ?APPLECENTREY - 
+         ?AppleW ?AppleH
+         0 0 none none ?AppleImg sdl$exblit
+         
+         ?MedChaps each {?x ?y i?`click@ if 1!die then}
+         ?LargeChaps each {?x ?y i?`click@ if 1!die then}
+         
+         ?y 1 - !y
+         ?y ?AppleH neg < if 1!die then
+         ?die ?this!`zombie
+     )
+     ]
+;
+
+:drawandupdateapples
+    ?Apples each {i?`drawandupdate@}
+    ?Apples (?`zombie not) filter !Apples
+;
+
+400!MouseX
+
+:fire |x:|
+    ?Apples len 10 < if
+        ?MouseX ?PipeY 70 ?SizeRatio * + mkapple ?Apples push
+    then
+;
+    
+        
+         
+
+0.7 !PipeScale
+1200 ?SizeRatio * !PipeY
+
+"pipe.png" sdl$load !PipeMain
+"pipemask.png" sdl$load !PipeMask
+
+ 
+:drawpipe |x,y,midfunc:w,h,r|
+    ?SizeRatio ?PipeScale * !r
+    ?PipeMain sdl$texsize !w !h
+    # 154 is the x-middle of the pipe bowl
+    ?x 154 ?r * - ?y
+    ?w ?r * ?h ?r *
+    0 0 none none ?PipeMain sdl$exblit
+    ?midfunc@
+    ?PipeMask sdl$texsize !w !h
+    ?x 154 ?r * - ?y
+    ?w ?r * ?h ?r *
+    0 0 none none ?PipeMask sdl$exblit
+;    
+    
+
+
+
+    
+
+[%
+ "q" (sdl$done)
+] !Keys
+
+(|k:|
+    ?k chr ?Keys get dup isnone not if @ else drop then
+) sdl$onkeydown
+
+(|x,y,button:|
+    ?x !MouseX
+    ?x fire
+) sdl$onmousedown
+
+(|x,y:| ?x !MouseX) sdl$onmousemove
+
+[50,10,4] [?mksmallchap,?mkmedchap,?mklargechap] 
+(|a,b:| 0 ?a range each{?b@} 1) zipWith drop
+
+:sortscale (|a,b:| ?a?`getsc@ ?b?`getsc@ >) fsort;
+[?LargeChaps,?MedChaps,?SmallChaps] each{i sortscale}
+
+(
+    sdl$clear
+    ?SOffsetX 0 ?SWidth ?SHeight 0 0 none none ?BackImg sdl$exblit
+    drawsmall 
+    ?SOffsetX 0 ?SWidth ?SHeight 0 0 none none ?BackFrontImg sdl$exblit
+    
+    # we draw the chaps and the apples halfway through the pipe!
+    ?MouseX ?PipeY (
+        drawmed drawlarge
+        drawandupdateapples
+    ) drawpipe
+    
+    gccount tostr 20 20 1 writetext
+    
+    sdl$flip
+    0.01 time$delay
+) sdl$ondraw
+
+
+sdl$loop quit
