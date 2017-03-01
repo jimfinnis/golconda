@@ -1,6 +1,8 @@
 #!/usr/local/bin/angort
 [`sdl,`time] each {i library drop}
 
+0.35 !GlobalSpeed
+[30,20,10] !ChapCounts
 
 # original image sizes
 1841 tofloat !OrigWidth
@@ -8,7 +10,7 @@
 
 ?OrigWidth ?OrigHeight / !Aspect
 
-0!FullScreen
+1!FullScreen
 
 # open a window or fullscreen
 (
@@ -77,7 +79,8 @@
     ?h ?scale * !sch
     # 1640 is the left-hand edge of the near yellow wall.
     rand 1640 ?SizeRatio * ?scw - toint % !x
-    rand ?SHeight toint 3 / % tofloat !y ?scale ?speedmul * 0.1 * frand 0.1 + * !speed
+    rand ?SHeight toint 3 / % tofloat !y 
+    ?scale ?speedmul * ?GlobalSpeed * frand 0.1 + * !speed
     [% dup!this
      `getx (?x),
      `gety (?y),
@@ -120,7 +123,7 @@
      ]
 ;
 
-:mksmallchap 0.2 ?SmallImgs mkchap ?SmallChaps push;
+:mksmallchap 0.5 ?SmallImgs mkchap ?SmallChaps push;
 :mkmedchap 1 ?MedImgs mkchap ?MedChaps push;
 :mklargechap 3 ?LargeImgs mkchap ?LargeChaps push;
 
@@ -215,7 +218,7 @@
 
 (|x,y:| ?x !MouseX) sdl$onmousemove
 
-[50,10,4] [?mksmallchap,?mkmedchap,?mklargechap] 
+?ChapCounts [?mksmallchap,?mkmedchap,?mklargechap] 
 (|a,b:| 0 ?a range each{?b@} 1) zipWith drop
 
 :sortscale (|a,b:| ?a?`getsc@ ?b?`getsc@ >) fsort;
