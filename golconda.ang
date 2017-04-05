@@ -203,12 +203,11 @@
 
     
 
-[%
- "q" (sdl$done)
-] !Keys
 
 (|k:|
-    ?k chr ?Keys get dup isnone not if @ else drop then
+    ?k chr <<[%
+        "q" (sdl$done)
+    ]>> get@
 ) sdl$onkeydown
 
 (|x,y,button:|
